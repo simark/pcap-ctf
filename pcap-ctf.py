@@ -9,25 +9,32 @@ class PacketProcessor(object):
 	def __init__(self, outfile):
 		self.out = open(outfile, "wb")
 		self.decoder = ImpactDecoder.EthDecoder()
-		
+
 	def process_packet(self, pkthdr, data):
 		# Compute timestamp
 		sec, microsec = pkthdr.getts()
 		ts = sec * 1000000000 + microsec * 1000
-		
+
 		# Write timestamp
 		self.out.write(struct.pack("Q", ts))
-		
+
 		# Le paquet decode avec impacket... on peut s'amuser avec ca
 		# Voir http://code.google.com/p/impacket/source/browse/trunk/impacket/ImpactPacket.py#495
 		decoded = self.decoder.decode(data)
-		
+
 		# Write event id
 		if isinstance(decoded.child(), IP):
-			# IP
-			self.out.write(struct.pack("B", 2))
-			self.write_eth_fields(decoded)
-			self.write_ip_fields(decoded.child())
+			if isinstance(decoded.child().child(), TCP):
+				# TCP
+				self.out.write(struct.pack("B", 3))
+				self.write_eth_fields(decoded)
+				self.write_ip_fields(decoded.child())
+				self.write_tcp_fields(decoded.child().child())
+			else:
+				# IP
+				self.out.write(struct.pack("B", 2))
+				self.write_eth_fields(decoded)
+				self.write_ip_fields(decoded.child())
 		else:
 			# Eth
 			self.out.write(struct.pack("B", 1))
@@ -41,13 +48,20 @@ class PacketProcessor(object):
 		self.out.write(struct.pack("%sB" % len(dst), *dst))
 		self.out.write(struct.pack("%sB" % len(src), *src))
 		self.out.write(struct.pack("H", eth_type))
-		
+
 	def write_ip_fields(self, decoded):
 		dst = decoded.get_ip_dst()
 		src = decoded.get_ip_src()
 
 		self.out.write(dst + "\0")
 		self.out.write(src + "\0")
+
+	def write_tcp_fields(self, decoded):
+		dst_port = decoded.get_th_dport()
+		src_port = decoded.get_th_sport()
+
+		self.out.write(struct.pack("H", dst_port))
+		self.out.write(struct.pack("H", src_port))
 
 def print_metadata(metadata_path):
 	f = open(metadata_path, "w")
@@ -80,6 +94,12 @@ def print_metadata(metadata_path):
 	f.write("\tstring src;\n")
 	f.write("};\n\n")
 
+	f.write("struct tcp_fields {\n")
+	f.write("\tstruct ip_fields eth;\n")
+	f.write("\tuint16_t dst;\n")
+	f.write("\tuint16_t src;\n")
+	f.write("};\n\n")
+
 	f.write("stream {\n")
 	f.write("\tevent.header := struct event_header;\n")
 	f.write("};\n\n")
@@ -102,26 +122,32 @@ def print_metadata(metadata_path):
 	f.write("\tfields := struct ip_fields;\n")
 	f.write("};\n\n")
 
+	f.write("event {\n")
+	f.write("\tid = 3;\n")
+	f.write("\tname = tcp_packet;\n")
+	f.write("\tfields := struct tcp_fields;\n")
+	f.write("};\n\n")
+
 
 def main(argv):
 	if len(argv) != 3:
 		print("Usage: " + argv[0] + " [pcap file] [ctf folder]")
 		sys.exit(1)
-	
+
 	pcap_filename = argv[1]
 	ctf_path = argv[2]
-	
+
 	if not os.path.exists(pcap_filename):
 		print("Source file does not exist.")
 		sys.exit(1)
-	
+
 	if os.path.exists(ctf_path):
 		print("Output folder exists, aborting.");
 		sys.exit(1)
-	
+
 	# open source
 	reader = pcapy.open_offline(pcap_filename)
-	
+
 	# create trace folder
 	os.mkdir(ctf_path)
 
@@ -130,7 +156,7 @@ def main(argv):
 
 	# open stream file
 	pp = PacketProcessor(ctf_path + "/stream")
-	
+
 	# process packets
 	reader.loop(-1, pp.process_packet)
 
