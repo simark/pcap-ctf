@@ -58,9 +58,11 @@ class PacketProcessor(object):
 	def write_ip_fields(self, decoded):
 		dst = decoded.get_ip_dst()
 		src = decoded.get_ip_src()
+		proto = decoded.get_ip_p()
 
 		self.out.write(dst + "\0")
 		self.out.write(src + "\0")
+		self.out.write(struct.pack("B", proto))
 
 	def write_tcp_fields(self, decoded):
 		dst_port = decoded.get_th_dport()
@@ -105,6 +107,7 @@ def print_metadata(metadata_path):
 	f.write("\tstruct eth_fields eth;\n")
 	f.write("\tstring dst;\n")
 	f.write("\tstring src;\n")
+	f.write("\tuint8_t proto;\n");
 	f.write("};\n\n")
 
 	f.write("struct tcp_fields {\n")
