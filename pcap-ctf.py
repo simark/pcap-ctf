@@ -20,21 +20,25 @@ class PacketProcessor(object):
 		self.out.write(struct.pack("Q", ts))
 		
 		# Write event id
-		self.out.write(struct.pack("Q", 0))
+		self.out.write(struct.pack("B", 1))
 		
 		# Le paquet decode avec impacket... on peut s'amuser avec ca
 		# Voir http://code.google.com/p/impacket/source/browse/trunk/impacket/ImpactPacket.py#495
 		decoded = self.decoder.decode(data)
 		
-		# Write arbitrary argument
-		self.out.write(struct.pack("Q", self.i))
+		# Write dst and src arguments
+		dst = decoded.get_ether_dhost()
+		src = decoded.get_ether_shost()
+		self.out.write(struct.pack("%sB" % len(dst), *dst))
+		self.out.write(struct.pack("%sB" % len(src), *src))
 		
 		self.i = self.i + 1
 
 def print_metadata(metadata_path):
 	f = open(metadata_path, "w")
 	f.write("/* CTF 1.8 */\n")
-	f.write("typealias integer { size = 64; align = 64; signed = false; } := uint64_t;\n")
+	f.write("typealias integer { size = 64; align = 8; signed = false; } := uint64_t;\n")
+	f.write("typealias integer { size = 8; align = 8; signed = false; base=16;} := uint8_t;\n")
 	f.write("trace {\n")
 	f.write("\tmajor = 1;\n")
 	f.write("\tminor = 8;\n")
@@ -43,7 +47,7 @@ def print_metadata(metadata_path):
 	
 	f.write("struct event_header {\n")
 	f.write("\tuint64_t timestamp;\n")
-	f.write("\tuint64_t id;\n")
+	f.write("\tuint8_t id;\n")
 	f.write("};\n\n")
 	
 	f.write("stream {\n")
@@ -54,6 +58,15 @@ def print_metadata(metadata_path):
 	f.write("\tid = 0;\n")
 	f.write("\tname = unknown_packet;\n")
 	f.write("\tfields := struct { uint64_t dummy; };\n")
+	f.write("};\n\n")
+	
+	f.write("event {\n")
+	f.write("\tid = 1;\n")
+	f.write("\tname = ethernet_packet;\n")
+	f.write("\tfields := struct {\n")
+	f.write("\t\tuint8_t dst[6];\n")
+	f.write("\t\tuint8_t src[6];\n")
+	f.write("\t};\n")
 	f.write("};\n\n")
 
 
