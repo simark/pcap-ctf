@@ -4,6 +4,7 @@ import os
 import struct
 from impacket import ImpactDecoder
 from impacket.ImpactPacket import IP, TCP, UDP, ICMP
+from impacket.IP6 import IP6
 
 class PacketProcessor(object):
 	def __init__(self, outfile):
@@ -16,7 +17,7 @@ class PacketProcessor(object):
 		ts = sec * 1000000000 + microsec * 1000
 
 		# Write timestamp
-		self.out.write(struct.pack("Q", ts))
+		self.out.write(struct.pack("=Q", ts))
 
 		# Le paquet decode avec impacket... on peut s'amuser avec ca
 		# Voir http://code.google.com/p/impacket/source/browse/trunk/impacket/ImpactPacket.py#495
@@ -26,24 +27,43 @@ class PacketProcessor(object):
 		if isinstance(decoded.child(), IP):
 			if isinstance(decoded.child().child(), TCP):
 				# TCP
-				self.out.write(struct.pack("B", 3))
+				self.out.write(struct.pack("=B", 3))
 				self.write_eth_fields(decoded)
 				self.write_ip_fields(decoded.child())
 				self.write_tcp_fields(decoded.child().child())
 			elif isinstance(decoded.child().child(), UDP):	
 				# UDP
-				self.out.write(struct.pack("B", 4))
+				self.out.write(struct.pack("=B", 4))
 				self.write_eth_fields(decoded)
 				self.write_ip_fields(decoded.child())
 				self.write_udp_fields(decoded.child().child())
 			else:
 				# IP
-				self.out.write(struct.pack("B", 2))
+				self.out.write(struct.pack("=B", 2))
 				self.write_eth_fields(decoded)
 				self.write_ip_fields(decoded.child())
+
+		elif isinstance(decoded.child(), IP6):
+			if isinstance(decoded.child().child(), TCP):
+				# TCP
+				self.out.write(struct.pack("=B", 3))
+				self.write_eth_fields(decoded)
+				self.write_ip6_fields(decoded.child())
+				self.write_tcp_fields(decoded.child().child())
+			elif isinstance(decoded.child().child(), UDP):	
+				# UDP
+				self.out.write(struct.pack("=B", 4))
+				self.write_eth_fields(decoded)
+				self.write_ip6_fields(decoded.child())
+				self.write_udp_fields(decoded.child().child())
+			else:
+				# IP
+				self.out.write(struct.pack("=B", 2))
+				self.write_eth_fields(decoded)			
+				self.write_ip6_fields(decoded.child())
 		else:
 			# Eth
-			self.out.write(struct.pack("B", 1))
+			self.out.write(struct.pack("=B", 1))
 			self.write_eth_fields(decoded)
 
 	def write_eth_fields(self, decoded):
@@ -53,30 +73,66 @@ class PacketProcessor(object):
 
 		self.out.write(dst + "\0")
 		self.out.write(src + "\0")
-		self.out.write(struct.pack("H", eth_type))
+		self.out.write(struct.pack("=H", eth_type))
 
 	def write_ip_fields(self, decoded):
 		dst = decoded.get_ip_dst()
 		src = decoded.get_ip_src()
 		proto = decoded.get_ip_p()
 
+		self.out.write(struct.pack("=B", 0))
 		self.out.write(dst + "\0")
 		self.out.write(src + "\0")
-		self.out.write(struct.pack("B", proto))
+		self.out.write(struct.pack("=B", proto))
+
+	def write_ip6_address(self, add_bytes):
+		addr = 0
+		for i, v in enumerate(add_bytes):
+			if (i % 2 == 1):
+				addr += v
+				self.out.write(struct.pack("=H", addr))
+				addr = 0;
+			else:
+				addr = v
+				addr <<= 8
+
+	def write_ip6_fields(self, decoded):
+		dst = decoded.get_destination_address().as_bytes()
+		src = decoded.get_source_address().as_bytes()
+		proto = decoded.get_protocol_version()
+
+		self.out.write(struct.pack("=B", 1))
+		self.write_ip6_address(dst)
+		self.write_ip6_address(src)
+		self.out.write(struct.pack("=B", proto))
 
 	def write_tcp_fields(self, decoded):
 		dst_port = decoded.get_th_dport()
 		src_port = decoded.get_th_sport()
+		seq = decoded.get_th_seq()
+		ack = decoded.get_th_ack()
+		flags = decoded.get_th_flags()
+		window = decoded.get_th_win()
+		cksum = decoded.get_th_sum()
 
-		self.out.write(struct.pack("H", dst_port))
-		self.out.write(struct.pack("H", src_port))
+		self.out.write(struct.pack("=H", dst_port))
+		self.out.write(struct.pack("=H", src_port))
+		self.out.write(struct.pack(">L", seq))
+		self.out.write(struct.pack(">L", ack))
+		self.out.write(struct.pack(">H", flags))
+		self.out.write(struct.pack(">H", window))
+		self.out.write(struct.pack(">H", cksum))
 		
 	def write_udp_fields(self, decoded):
 		dst_port = decoded.get_uh_dport()
 		src_port = decoded.get_uh_sport()
+		udp_len = decoded.get_uh_ulen()
+		udp_sum = decoded.get_uh_sum()
 
-		self.out.write(struct.pack("H", dst_port))
-		self.out.write(struct.pack("H", src_port))
+		self.out.write(struct.pack("=H", dst_port))
+		self.out.write(struct.pack("=H", src_port))
+		self.out.write(struct.pack("=H", udp_len))
+		self.out.write(struct.pack("=H", udp_sum))
 
 def print_metadata(metadata_path):
 	f = open(metadata_path, "w")
@@ -85,6 +141,8 @@ def print_metadata(metadata_path):
 	f.write("typealias integer { size = 32; align = 8; signed = false; base = 16;} := uint32_t;\n")
 	f.write("typealias integer { size = 16; align = 8; signed = false; base = 16;} := uint16_t;\n")
 	f.write("typealias integer { size = 8; align = 8; signed = false; base = 16;} := uint8_t;\n")
+	f.write("typealias integer { size = 32; align = 8; signed = false; base=16;} := ulong_t;\n")
+	f.write("typealias integer { size = 16; align = 8; signed = false; base=16;} := word;\n")
 
 	f.write("trace {\n")
 	f.write("\tmajor = 1;\n")
@@ -103,23 +161,44 @@ def print_metadata(metadata_path):
 	f.write("\tuint16_t eth_type;\n")
 	f.write("};\n\n")
 
-	f.write("struct ip_fields {\n")
-	f.write("\tstruct eth_fields eth;\n")
+	f.write("struct ip_options {\n")
 	f.write("\tstring dst;\n")
 	f.write("\tstring src;\n")
 	f.write("\tuint8_t proto;\n");
+	f.write("};\n\n")
+
+	f.write("struct ip6_options {\n")
+	f.write("\tuint16_t dst[8];\n")
+	f.write("\tuint16_t src[8];\n")
+	f.write("\tuint8_t proto;\n");
+	f.write("};\n\n")
+
+	f.write("struct ip_fields {\n")
+	f.write("\tstruct eth_fields eth;\n")
+	f.write("\tenum : uint8_t {v4,v6} choice;\n")
+	f.write("\tvariant <choice> {\n")
+	f.write("\t\tstruct ip_options v4;\n")
+	f.write("\t\tstruct ip6_options v6;\n")
+	f.write("\t} ip;\n")
 	f.write("};\n\n")
 
 	f.write("struct tcp_fields {\n")
 	f.write("\tstruct ip_fields ip;\n")
 	f.write("\tuint16_t dst;\n")
 	f.write("\tuint16_t src;\n")
+	f.write("\tulong_t seq;\n")
+	f.write("\tulong_t ack;\n")
+	f.write("\tuint16_t flags;\n")
+	f.write("\tuint16_t window;\n")
+	f.write("\tword sum;\n")
 	f.write("};\n\n")
 	
 	f.write("struct udp_fields {\n")
 	f.write("\tstruct ip_fields ip;\n")
 	f.write("\tuint16_t dst;\n")
 	f.write("\tuint16_t src;\n")
+	f.write("\tuint16_t len;\n")
+	f.write("\tuint16_t sum;\n")
 	f.write("};\n\n")
 
 	f.write("stream {\n")
