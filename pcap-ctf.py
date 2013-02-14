@@ -30,6 +30,12 @@ class PacketProcessor(object):
 				self.write_eth_fields(decoded)
 				self.write_ip_fields(decoded.child())
 				self.write_tcp_fields(decoded.child().child())
+			elif isinstance(decoded.child().child(), UDP):	
+				# UDP
+				self.out.write(struct.pack("B", 4))
+				self.write_eth_fields(decoded)
+				self.write_ip_fields(decoded.child())
+				self.write_udp_fields(decoded.child().child())
 			else:
 				# IP
 				self.out.write(struct.pack("B", 2))
@@ -59,6 +65,13 @@ class PacketProcessor(object):
 	def write_tcp_fields(self, decoded):
 		dst_port = decoded.get_th_dport()
 		src_port = decoded.get_th_sport()
+
+		self.out.write(struct.pack("H", dst_port))
+		self.out.write(struct.pack("H", src_port))
+		
+	def write_udp_fields(self, decoded):
+		dst_port = decoded.get_uh_dport()
+		src_port = decoded.get_uh_sport()
 
 		self.out.write(struct.pack("H", dst_port))
 		self.out.write(struct.pack("H", src_port))
@@ -99,6 +112,12 @@ def print_metadata(metadata_path):
 	f.write("\tuint16_t dst;\n")
 	f.write("\tuint16_t src;\n")
 	f.write("};\n\n")
+	
+	f.write("struct udp_fields {\n")
+	f.write("\tstruct ip_fields ip;\n")
+	f.write("\tuint16_t dst;\n")
+	f.write("\tuint16_t src;\n")
+	f.write("};\n\n")
 
 	f.write("stream {\n")
 	f.write("\tevent.header := struct event_header;\n")
@@ -126,6 +145,12 @@ def print_metadata(metadata_path):
 	f.write("\tid = 3;\n")
 	f.write("\tname = tcp_packet;\n")
 	f.write("\tfields := struct tcp_fields;\n")
+	f.write("};\n\n")
+	
+	f.write("event {\n")
+	f.write("\tid = 4;\n")
+	f.write("\tname = udp_packet;\n")
+	f.write("\tfields := struct udp_fields;\n")
 	f.write("};\n\n")
 
 
