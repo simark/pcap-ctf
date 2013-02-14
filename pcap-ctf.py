@@ -41,12 +41,12 @@ class PacketProcessor(object):
 			self.write_eth_fields(decoded)
 
 	def write_eth_fields(self, decoded):
-		dst = decoded.get_ether_dhost()
-		src = decoded.get_ether_shost()
+		dst = ':'.join([hex(x).lstrip('0x').zfill(2) for x in decoded.get_ether_dhost()])
+		src = ':'.join([hex(x).lstrip('0x').zfill(2) for x in decoded.get_ether_shost()])
 		eth_type = decoded.get_ether_type()
 
-		self.out.write(struct.pack("%sB" % len(dst), *dst))
-		self.out.write(struct.pack("%sB" % len(src), *src))
+		self.out.write(dst + "\0")
+		self.out.write(src + "\0")
 		self.out.write(struct.pack("H", eth_type))
 
 	def write_ip_fields(self, decoded):
@@ -83,8 +83,8 @@ def print_metadata(metadata_path):
 	f.write("};\n\n")
 
 	f.write("struct eth_fields {\n")
-	f.write("\tuint8_t dst[6];\n")
-	f.write("\tuint8_t src[6];\n")
+	f.write("\tstring dst;\n")
+	f.write("\tstring src;\n")
 	f.write("\tuint16_t eth_type;\n")
 	f.write("};\n\n")
 
@@ -95,7 +95,7 @@ def print_metadata(metadata_path):
 	f.write("};\n\n")
 
 	f.write("struct tcp_fields {\n")
-	f.write("\tstruct ip_fields eth;\n")
+	f.write("\tstruct ip_fields ip;\n")
 	f.write("\tuint16_t dst;\n")
 	f.write("\tuint16_t src;\n")
 	f.write("};\n\n")
