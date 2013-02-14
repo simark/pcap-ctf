@@ -2,10 +2,13 @@ import sys
 import pcapy
 import os
 import struct
+from impacket import ImpactDecoder
+from impacket.ImpactPacket import IP, TCP, UDP, ICMP
 
 class PacketProcessor(object):
 	def __init__(self, outfile):
 		self.out = open(outfile, "wb")
+		self.decoder = ImpactDecoder.EthDecoder()
 		self.i = 0
 		
 	def process_packet(self, pkthdr, data):
@@ -16,8 +19,16 @@ class PacketProcessor(object):
 		# Write timestamp
 		self.out.write(struct.pack("Q", ts))
 		
+		# Write event id
+		self.out.write(struct.pack("Q", 0))
+		
+		# Le paquet decode avec impacket... on peut s'amuser avec ca
+		# Voir http://code.google.com/p/impacket/source/browse/trunk/impacket/ImpactPacket.py#495
+		decoded = self.decoder.decode(data)
+		
 		# Write arbitrary argument
 		self.out.write(struct.pack("Q", self.i))
+		
 		self.i = self.i + 1
 
 def print_metadata(metadata_path):
@@ -32,6 +43,7 @@ def print_metadata(metadata_path):
 	
 	f.write("struct event_header {\n")
 	f.write("\tuint64_t timestamp;\n")
+	f.write("\tuint64_t id;\n")
 	f.write("};\n\n")
 	
 	f.write("stream {\n")
@@ -39,9 +51,11 @@ def print_metadata(metadata_path):
 	f.write("};\n\n")
 	
 	f.write("event {\n")
-	f.write("\tname = network_packet;\n")
-	f.write("\tfields := struct { uint64_t arg; };\n")
+	f.write("\tid = 0;\n")
+	f.write("\tname = unknown_packet;\n")
+	f.write("\tfields := struct { uint64_t dummy; };\n")
 	f.write("};\n\n")
+
 
 def main(argv):
 	if len(argv) != 3:
