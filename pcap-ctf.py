@@ -106,8 +106,8 @@ class PacketProcessor(object):
 		proto = decoded.get_protocol_version()
 
 		self.out.write(struct.pack("=B", 6))
-		self.write_ip6_address(dst)
-		self.write_ip6_address(src)
+		self.write_ipv6_address(dst)
+		self.write_ipv6_address(src)
 		self.out.write(struct.pack("=B", proto))
 
 	def write_tcp_fields(self, decoded):
