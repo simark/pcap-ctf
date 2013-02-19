@@ -12,6 +12,10 @@ class PacketProcessor(object):
 		self.decoder = ImpactDecoder.EthDecoder()
 
 	def process_packet(self, pkthdr, data):
+		self.write_event(pkthdr, data)
+		self.write_event(pkthdr, data)
+
+	def write_event(self, pkthdr, data):
 		# Compute timestamp
 		sec, microsec = pkthdr.getts()
 		ts = sec * 1000000000 + microsec * 1000
@@ -29,38 +33,38 @@ class PacketProcessor(object):
 				# TCP
 				self.out.write(struct.pack("=B", 3))
 				self.write_eth_fields(decoded)
-				self.write_ip_fields(decoded.child())
+				self.write_ipv4_fields(decoded.child())
 				self.write_tcp_fields(decoded.child().child())
 			elif isinstance(decoded.child().child(), UDP):	
 				# UDP
 				self.out.write(struct.pack("=B", 4))
 				self.write_eth_fields(decoded)
-				self.write_ip_fields(decoded.child())
+				self.write_ipv4_fields(decoded.child())
 				self.write_udp_fields(decoded.child().child())
 			else:
 				# IP
 				self.out.write(struct.pack("=B", 2))
 				self.write_eth_fields(decoded)
-				self.write_ip_fields(decoded.child())
+				self.write_ipv4_fields(decoded.child())
 
 		elif isinstance(decoded.child(), IP6):
 			if isinstance(decoded.child().child(), TCP):
 				# TCP
 				self.out.write(struct.pack("=B", 3))
 				self.write_eth_fields(decoded)
-				self.write_ip6_fields(decoded.child())
+				self.write_ipv6_fields(decoded.child())
 				self.write_tcp_fields(decoded.child().child())
 			elif isinstance(decoded.child().child(), UDP):	
 				# UDP
 				self.out.write(struct.pack("=B", 4))
 				self.write_eth_fields(decoded)
-				self.write_ip6_fields(decoded.child())
+				self.write_ipv6_fields(decoded.child())
 				self.write_udp_fields(decoded.child().child())
 			else:
 				# IP
 				self.out.write(struct.pack("=B", 2))
 				self.write_eth_fields(decoded)			
-				self.write_ip6_fields(decoded.child())
+				self.write_ipv6_fields(decoded.child())
 		else:
 			# Eth
 			self.out.write(struct.pack("=B", 1))
@@ -75,17 +79,17 @@ class PacketProcessor(object):
 		self.out.write(src + "\0")
 		self.out.write(struct.pack("=H", eth_type))
 
-	def write_ip_fields(self, decoded):
+	def write_ipv4_fields(self, decoded):
 		dst = decoded.get_ip_dst()
 		src = decoded.get_ip_src()
 		proto = decoded.get_ip_p()
 
-		self.out.write(struct.pack("=B", 0))
+		self.out.write(struct.pack("=B", 4))
 		self.out.write(dst + "\0")
 		self.out.write(src + "\0")
 		self.out.write(struct.pack("=B", proto))
 
-	def write_ip6_address(self, add_bytes):
+	def write_ipv6_address(self, add_bytes):
 		addr = 0
 		for i, v in enumerate(add_bytes):
 			if (i % 2 == 1):
@@ -96,12 +100,12 @@ class PacketProcessor(object):
 				addr = v
 				addr <<= 8
 
-	def write_ip6_fields(self, decoded):
+	def write_ipv6_fields(self, decoded):
 		dst = decoded.get_destination_address().as_bytes()
 		src = decoded.get_source_address().as_bytes()
 		proto = decoded.get_protocol_version()
 
-		self.out.write(struct.pack("=B", 1))
+		self.out.write(struct.pack("=B", 6))
 		self.write_ip6_address(dst)
 		self.write_ip6_address(src)
 		self.out.write(struct.pack("=B", proto))
@@ -141,8 +145,8 @@ def print_metadata(metadata_path):
 	f.write("typealias integer { size = 32; align = 8; signed = false; base = 16;} := uint32_t;\n")
 	f.write("typealias integer { size = 16; align = 8; signed = false; base = 16;} := uint16_t;\n")
 	f.write("typealias integer { size = 8; align = 8; signed = false; base = 16;} := uint8_t;\n")
-	f.write("typealias integer { size = 32; align = 8; signed = false; base=16;} := ulong_t;\n")
-	f.write("typealias integer { size = 16; align = 8; signed = false; base=16;} := word;\n")
+	f.write("typealias integer { size = 32; align = 8; signed = false; base = 16;} := ulong_t;\n")
+	f.write("typealias integer { size = 16; align = 8; signed = false; base = 16;} := word;\n")
 
 	f.write("trace {\n")
 	f.write("\tmajor = 1;\n")
@@ -161,13 +165,13 @@ def print_metadata(metadata_path):
 	f.write("\tuint16_t eth_type;\n")
 	f.write("};\n\n")
 
-	f.write("struct ip_options {\n")
+	f.write("struct ipv4_fields {\n")
 	f.write("\tstring dst;\n")
 	f.write("\tstring src;\n")
 	f.write("\tuint8_t proto;\n");
 	f.write("};\n\n")
 
-	f.write("struct ip6_options {\n")
+	f.write("struct ipv6_fields {\n")
 	f.write("\tuint16_t dst[8];\n")
 	f.write("\tuint16_t src[8];\n")
 	f.write("\tuint8_t proto;\n");
@@ -175,10 +179,10 @@ def print_metadata(metadata_path):
 
 	f.write("struct ip_fields {\n")
 	f.write("\tstruct eth_fields eth;\n")
-	f.write("\tenum : uint8_t {v4,v6} choice;\n")
-	f.write("\tvariant <choice> {\n")
-	f.write("\t\tstruct ip_options v4;\n")
-	f.write("\t\tstruct ip6_options v6;\n")
+	f.write("\tenum : uint8_t { v4 = 4, v6 = 6} ip_version;\n")
+	f.write("\tvariant <ip_version> {\n")
+	f.write("\t\tstruct ipv4_fields v4;\n")
+	f.write("\t\tstruct ipv6_fields v6;\n")
 	f.write("\t} ip;\n")
 	f.write("};\n\n")
 
