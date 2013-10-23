@@ -34,7 +34,7 @@ class PacketProcessor(object):
 				self.write_eth_fields(decoded)
 				self.write_ipv4_fields(decoded.child())
 				self.write_tcp_fields(decoded.child().child())
-			elif isinstance(decoded.child().child(), UDP):	
+			elif isinstance(decoded.child().child(), UDP):
 				# UDP
 				self.out.write(struct.pack("=B", 4))
 				self.write_eth_fields(decoded)
@@ -53,7 +53,7 @@ class PacketProcessor(object):
 				self.write_eth_fields(decoded)
 				self.write_ipv6_fields(decoded.child())
 				self.write_tcp_fields(decoded.child().child())
-			elif isinstance(decoded.child().child(), UDP):	
+			elif isinstance(decoded.child().child(), UDP):
 				# UDP
 				self.out.write(struct.pack("=B", 4))
 				self.write_eth_fields(decoded)
@@ -62,7 +62,7 @@ class PacketProcessor(object):
 			else:
 				# IP
 				self.out.write(struct.pack("=B", 2))
-				self.write_eth_fields(decoded)			
+				self.write_eth_fields(decoded)
 				self.write_ipv6_fields(decoded.child())
 		else:
 			# Eth
@@ -125,7 +125,7 @@ class PacketProcessor(object):
 		self.out.write(struct.pack(">H", flags))
 		self.out.write(struct.pack(">H", window))
 		self.out.write(struct.pack(">H", cksum))
-		
+
 	def write_udp_fields(self, decoded):
 		dst_port = decoded.get_uh_dport()
 		src_port = decoded.get_uh_sport()
@@ -193,7 +193,7 @@ def print_metadata(metadata_path):
 	f.write("\tuint16_t window;\n")
 	f.write("\tuint16_t sum;\n")
 	f.write("};\n\n")
-	
+
 	f.write("struct udp_fields {\n")
 	f.write("\tstruct ip_fields ip;\n")
 	f.write("\tuint16_t dst;\n")
@@ -229,7 +229,7 @@ def print_metadata(metadata_path):
 	f.write("\tname = tcp_packet;\n")
 	f.write("\tfields := struct tcp_fields;\n")
 	f.write("};\n\n")
-	
+
 	f.write("event {\n")
 	f.write("\tid = 4;\n")
 	f.write("\tname = udp_packet;\n")
