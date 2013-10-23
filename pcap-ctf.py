@@ -13,7 +13,6 @@ class PacketProcessor(object):
 
 	def process_packet(self, pkthdr, data):
 		self.write_event(pkthdr, data)
-		self.write_event(pkthdr, data)
 
 	def write_event(self, pkthdr, data):
 		# Compute timestamp
